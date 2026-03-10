@@ -27,7 +27,10 @@ class LogModel {
   final String category; // TAMBAHAN
 
   @HiveField(7)
-  final bool isSynced; // TAMBAHAN
+  final bool isSynced; // KEMBALIKAN
+
+  @HiveField(8)
+  final bool isPublic; // TAMBAHAN
 
   LogModel({
     this.id,
@@ -37,7 +40,8 @@ class LogModel {
     required this.authorId,
     required this.teamId,
     required this.category,
-    this.isSynced = true, // default true untuk data dari cloud
+    this.isSynced = true,
+    this.isPublic = false,
   });
 
   Map<String, dynamic> toMap() => {
@@ -49,6 +53,7 @@ class LogModel {
     'teamId': teamId,
     'category': category,
     'isSynced': isSynced,
+    'isPublic': isPublic,
   };
 
   factory LogModel.fromMap(Map<String, dynamic> map) {
@@ -60,7 +65,8 @@ class LogModel {
       authorId: map['authorId'] ?? 'unknown',
       teamId: map['teamId'] ?? 'no_team',
       category: map['category'] ?? 'software',
-      isSynced: true, // Data dari DB Cloud selalu dianggap sudah sinkron
+      isSynced: true,
+      isPublic: map['isPublic'] ?? false,
     );
   }
 
@@ -73,6 +79,7 @@ class LogModel {
     String? teamId,
     String? category,
     bool? isSynced,
+    bool? isPublic,
   }) {
     return LogModel(
       id: id ?? this.id,
@@ -83,6 +90,7 @@ class LogModel {
       teamId: teamId ?? this.teamId,
       category: category ?? this.category,
       isSynced: isSynced ?? this.isSynced,
+      isPublic: isPublic ?? this.isPublic,
     );
   }
 }

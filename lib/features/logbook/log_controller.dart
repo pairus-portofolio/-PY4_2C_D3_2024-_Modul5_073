@@ -83,6 +83,7 @@ class LogController {
     String desc, {
     String category = 'Pribadi',
     required String authorId,
+    bool isPublic = false,
   }) async {
     final newLog = LogModel(
       id: ObjectId().oid,
@@ -93,6 +94,7 @@ class LogController {
       teamId: "team1",
       category: category,
       isSynced: false,
+      isPublic: isPublic,
     );
 
     // 1. Simpan Lokal
@@ -111,6 +113,7 @@ class LogController {
     String title,
     String desc, {
     String category = 'Pribadi',
+    bool isPublic = false,
   }) async {
     final oldLog = logsNotifier.value[index];
     final updatedLog = oldLog.copyWith(
@@ -118,6 +121,7 @@ class LogController {
       description: desc,
       category: category,
       isSynced: false,
+      isPublic: isPublic,
     );
 
     // 1. Update Lokal

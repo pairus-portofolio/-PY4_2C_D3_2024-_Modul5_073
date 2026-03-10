@@ -24,6 +24,7 @@ class _LogEditorPageState extends State<LogEditorPage> {
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late String _selectedCategory;
+  late bool _isPublic;
 
   @override
   void initState() {
@@ -33,6 +34,7 @@ class _LogEditorPageState extends State<LogEditorPage> {
       text: widget.log?.description ?? '',
     );
     _selectedCategory = widget.log?.category ?? 'Pribadi';
+    _isPublic = widget.log?.isPublic ?? false;
   }
 
   @override
@@ -48,6 +50,7 @@ class _LogEditorPageState extends State<LogEditorPage> {
         'title': _titleController.text,
         'description': _descController.text,
         'category': _selectedCategory,
+        'isPublic': _isPublic,
       });
     }
   }
@@ -152,6 +155,52 @@ class _LogEditorPageState extends State<LogEditorPage> {
                           ),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Visibilitas',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _isPublic ? Colors.blue[50] : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _isPublic
+                              ? Colors.blue[100]!
+                              : Colors.grey[200]!,
+                        ),
+                      ),
+                      child: SwitchListTile(
+                        title: Text(
+                          _isPublic ? 'Publik' : 'Privat',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _isPublic
+                                ? Colors.blue[800]
+                                : Colors.grey[800],
+                          ),
+                        ),
+                        subtitle: Text(
+                          _isPublic
+                              ? 'Seluruh tim & ketua bisa melihat catatan ini.'
+                              : 'Hanya Anda yang bisa melihat catatan ini.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: _isPublic,
+                        onChanged: (val) {
+                          setState(() => _isPublic = val);
+                        },
+                        secondary: Icon(
+                          _isPublic ? Icons.public : Icons.lock_outline_rounded,
+                          color: _isPublic ? Colors.blue : Colors.grey,
+                        ),
+                        activeColor: Colors.blue,
+                      ),
                     ),
                   ],
                 ),

@@ -1,28 +1,22 @@
+import '../features/logbook/models/log_model.dart';
+
 class AccessPolicy {
-  static bool canEdit({
-    required String userId,
-    required String role,
-    required String logAuthorId,
-  }) {
-    // Ketua boleh edit semua
-    if (role.toLowerCase() == "ketua") {
-      return true;
-    }
-
-    // Owner boleh edit log sendiri
-    if (userId == logAuthorId) {
-      return true;
-    }
-
-    return false;
+  // Hanya pembuat yang boleh edit (Sovereignty)
+  static bool canEdit({required String userId, required String logAuthorId}) {
+    return userId == logAuthorId;
   }
 
-  static bool canDelete({required String role}) {
-    // hanya ketua yang boleh delete
-    if (role.toLowerCase() == "ketua") {
-      return true;
-    }
+  // Hanya pembuat yang boleh delete (Sovereignty)
+  static bool canDelete({required String userId, required String logAuthorId}) {
+    return userId == logAuthorId;
+  }
 
-    return false;
+  // Siapa yang boleh melihat catatan ini (Visibility)
+  static bool canView({required LogModel log, required String currentUserId}) {
+    // Pemilik selalu bisa lihat
+    if (log.authorId == currentUserId) return true;
+
+    // Orang lain (anggota/ketua) bisa lihat jika publik
+    return log.isPublic;
   }
 }

@@ -86,6 +86,7 @@ class _LogViewState extends State<LogView> {
             result['description'],
             category: result['category'],
             authorId: userId,
+            isPublic: result['isPublic'] ?? false,
           );
         } else {
           _logFuture = _controller.updateLog(
@@ -93,6 +94,7 @@ class _LogViewState extends State<LogView> {
             result['title'],
             result['description'],
             category: result['category'],
+            isPublic: result['isPublic'] ?? false,
           );
         }
       });
@@ -316,6 +318,13 @@ class _LogViewState extends State<LogView> {
 
                 final logs = snapshot.data!;
                 final filteredLogs = logs.where((log) {
+                  // 🛡️ Visibility Check: Hanya pemilik atau jika catatan Publik
+                  final canSee = AccessPolicy.canView(
+                    log: log,
+                    currentUserId: userId,
+                  );
+                  if (!canSee) return false;
+
                   return log.title.toLowerCase().contains(_searchQuery);
                 }).toList();
 
@@ -335,13 +344,15 @@ class _LogViewState extends State<LogView> {
                     itemBuilder: (context, index) {
                       final log = filteredLogs[index];
 
-                      // 🛡️ Access Checks
+                      // 🛡️ Access Checks (Sovereignty: Only Author)
                       final bool canEdit = AccessPolicy.canEdit(
                         userId: userId,
-                        role: role,
                         logAuthorId: log.authorId,
                       );
-                      final bool canDelete = AccessPolicy.canDelete(role: role);
+                      final bool canDelete = AccessPolicy.canDelete(
+                        userId: userId,
+                        logAuthorId: log.authorId,
+                      );
 
                       return Dismissible(
                         key: ValueKey(log.id ?? log.title + log.date),

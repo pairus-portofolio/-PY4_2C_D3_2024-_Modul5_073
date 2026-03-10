@@ -188,6 +188,17 @@ class _AnimatedLogCardState extends State<AnimatedLogCard>
                                   // Time and Sync status
                                   Row(
                                     children: [
+                                      // 👁️ Visibility Icon
+                                      Icon(
+                                        widget.log.isPublic
+                                            ? Icons.public_rounded
+                                            : Icons.lock_outline_rounded,
+                                        size: 14,
+                                        color: widget.log.isPublic
+                                            ? Colors.blue[400]
+                                            : Colors.grey[500],
+                                      ),
+                                      const SizedBox(width: 8),
                                       Icon(
                                         widget.log.isSynced
                                             ? Icons.cloud_done_rounded
