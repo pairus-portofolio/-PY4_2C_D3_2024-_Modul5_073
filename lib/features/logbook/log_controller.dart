@@ -19,6 +19,8 @@ class LogController {
     try {
       // 2. Connect to Mongo and refresh
       await _mongoService.connect();
+      // 🚀 Sync data yang tertunda segera setelah login/terhubung
+      await syncPendingLogs();
       return await loadFromCloud();
     } catch (e) {
       // If offline, just return local data
@@ -38,16 +40,37 @@ class LogController {
   // 📥 LOAD DATA FROM ATLAS
   Future<List<LogModel>> loadFromCloud() async {
     try {
-      final logs = await _mongoService.getAllLogs();
+      final cloudLogs = await _mongoService.getAllLogs();
 
-      // Update Hive with fresh data from Cloud
-      await _logBox.clear();
-      await _logBox.addAll(logs);
+      // 🛑 JANGAN PAKAI clear() sembarangan!
+      // Kita ambil data lokal yang belum sempat tersinkron
+      final pendingLogs = _logBox.values.where((l) => !l.isSynced).toList();
 
-      // Sort for UI consistency
-      logs.sort((a, b) => b.date.compareTo(a.date));
-      logsNotifier.value = logs;
-      return logs;
+      // Bersihkan hanya data yang SUDAH tersinkron (agar data cloud yang baru masuk)
+      final keysToDelete = _logBox.keys.where((key) {
+        final log = _logBox.get(key);
+        return log != null && log.isSynced;
+      }).toList();
+
+      for (var key in keysToDelete) {
+        await _logBox.delete(key);
+      }
+
+      // Masukkan data cloud baru ke Hive
+      for (var cloudLog in cloudLogs) {
+        // Cek apakah data ini sudah ada di pending (lokal lebih baru)
+        bool isPendingLocally = pendingLogs.any((l) => l.id == cloudLog.id);
+        if (!isPendingLocally) {
+          await _logBox.add(cloudLog);
+        }
+      }
+
+      // Gabungkan untuk UI
+      final allLogs = _logBox.values.toList();
+      allLogs.sort((a, b) => b.date.compareTo(a.date));
+      logsNotifier.value = allLogs;
+
+      return allLogs;
     } catch (e) {
       debugPrint("Load from Cloud failed: $e");
       return logsNotifier.value;
@@ -69,65 +92,92 @@ class LogController {
       authorId: authorId,
       teamId: "team1",
       category: category,
+      isSynced: false,
     );
 
-    // 1. Update UI & Hive Instantly
-    logsNotifier.value = [newLog, ...logsNotifier.value];
+    // 1. Simpan Lokal
     await _logBox.add(newLog);
+    logsNotifier.value = [newLog, ...logsNotifier.value];
 
-    // 2. Sync to Cloud
-    try {
-      await _mongoService.insertLog(newLog);
-    } catch (e) {
-      debugPrint("Background Cloud Sync failed (Add): $e");
-    }
+    // 2. Sync Atlas (Async)
+    _syncToAtlas(newLog, isNew: true);
 
     return logsNotifier.value;
   }
 
-  // ✏ UPDATE LOG
+  // 📝 UPDATE LOG
   Future<List<LogModel>> updateLog(
     int index,
     String title,
     String desc, {
     String category = 'Pribadi',
   }) async {
-    final currentLogs = List<LogModel>.from(logsNotifier.value);
-    final oldLog = currentLogs[index];
-
-    final updatedLog = LogModel(
-      id: oldLog.id,
+    final oldLog = logsNotifier.value[index];
+    final updatedLog = oldLog.copyWith(
       title: title,
       description: desc,
-      date: DateTime.now().toIso8601String(),
-      authorId: oldLog.authorId,
-      teamId: oldLog.teamId,
       category: category,
+      isSynced: false,
     );
 
-    // 1. Update UI & Hive Instantly
-    currentLogs[index] = updatedLog;
-    logsNotifier.value = currentLogs;
-
+    // 1. Update Lokal
     final boxKey = _logBox.keys.firstWhere(
       (k) => _logBox.get(k)?.id == oldLog.id,
       orElse: () => null,
     );
     if (boxKey != null) {
       await _logBox.put(boxKey, updatedLog);
+    } else {
+      await _logBox.putAt(index, updatedLog);
     }
 
-    // 2. Sync to Cloud
-    try {
-      if (oldLog.id != null) {
-        await _mongoService.deleteLog(oldLog.id!);
-      }
-      await _mongoService.insertLog(updatedLog);
-    } catch (e) {
-      debugPrint("Background Cloud Sync failed (Update): $e");
-    }
+    List<LogModel> currentLogs = List.from(logsNotifier.value);
+    currentLogs[index] = updatedLog;
+    logsNotifier.value = currentLogs;
+
+    // 2. Sync Atlas (Async)
+    _syncToAtlas(updatedLog, isNew: false);
 
     return logsNotifier.value;
+  }
+
+  // 🔄 Internal Sync
+  Future<void> _syncToAtlas(LogModel log, {required bool isNew}) async {
+    try {
+      if (isNew) {
+        await _mongoService.insertLog(log);
+      } else {
+        await _mongoService.updateLog(log.id!, log);
+      }
+
+      // Berhasil -> Update status isSynced
+      final boxKey = _logBox.keys.firstWhere(
+        (k) => _logBox.get(k)?.id == log.id,
+        orElse: () => null,
+      );
+      if (boxKey != null) {
+        final syncedLog = log.copyWith(isSynced: true);
+        await _logBox.put(boxKey, syncedLog);
+
+        // Update UI jika masih ada di list
+        List<LogModel> currentLogs = List.from(logsNotifier.value);
+        int uiIndex = currentLogs.indexWhere((l) => l.id == log.id);
+        if (uiIndex != -1) {
+          currentLogs[uiIndex] = syncedLog;
+          logsNotifier.value = currentLogs;
+        }
+      }
+    } catch (e) {
+      debugPrint("Atlas Sync Error: $e");
+    }
+  }
+
+  // ☁️ Sinkronisasi yang tertunda
+  Future<void> syncPendingLogs() async {
+    final pending = _logBox.values.where((l) => !l.isSynced).toList();
+    for (var log in pending) {
+      await _syncToAtlas(log, isNew: false);
+    }
   }
 
   // 🗑 DELETE LOG
@@ -135,7 +185,6 @@ class LogController {
     final currentLogs = List<LogModel>.from(logsNotifier.value);
     final log = currentLogs[index];
 
-    // 1. Update UI & Hive Instantly
     currentLogs.removeAt(index);
     logsNotifier.value = currentLogs;
 
@@ -147,13 +196,12 @@ class LogController {
       await _logBox.delete(boxKey);
     }
 
-    // 2. Sync to Cloud
     try {
       if (log.id != null) {
         await _mongoService.deleteLog(log.id!);
       }
     } catch (e) {
-      debugPrint("Background Cloud Sync failed (Delete): $e");
+      debugPrint("Delete Atlas Error: $e");
     }
 
     return logsNotifier.value;

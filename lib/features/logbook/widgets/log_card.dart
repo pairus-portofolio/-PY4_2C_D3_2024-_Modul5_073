@@ -185,9 +185,19 @@ class _AnimatedLogCardState extends State<AnimatedLogCard>
                                     },
                                   ),
                                   const Spacer(),
-                                  // Time with icon
+                                  // Time and Sync status
                                   Row(
                                     children: [
+                                      Icon(
+                                        widget.log.isSynced
+                                            ? Icons.cloud_done_rounded
+                                            : Icons.cloud_off_rounded,
+                                        size: 14,
+                                        color: widget.log.isSynced
+                                            ? Colors.blue[300]
+                                            : Colors.orange[300],
+                                      ),
+                                      const SizedBox(width: 4),
                                       Icon(
                                         Icons.access_time,
                                         size: 14,

@@ -109,6 +109,28 @@ class MongoService {
     return data.map((e) => LogModel.fromMap(e)).toList();
   }
 
+  // ✅ UPDATE
+  Future<void> updateLog(String id, LogModel log) async {
+    if (_collection == null) {
+      await LogHelper.writeLog(
+        "Database belum terkoneksi (updateLog)",
+        source: 'MongoService',
+        level: 1,
+      );
+      throw Exception("Database belum terkoneksi");
+    }
+
+    await _collection!.replaceOne(
+      where.id(ObjectId.fromHexString(id)),
+      log.toMap(),
+    );
+    await LogHelper.writeLog(
+      "Catatan dengan ID $id berhasil diperbarui",
+      source: 'MongoService',
+      level: 2,
+    );
+  }
+
   // ✅ DELETE
   Future<void> deleteLog(String id) async {
     if (_collection == null) {

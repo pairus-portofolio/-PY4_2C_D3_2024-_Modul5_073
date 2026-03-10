@@ -5,7 +5,6 @@ part 'log_model.g.dart';
 
 @HiveType(typeId: 0)
 class LogModel {
-
   @HiveField(0)
   final String? id;
 
@@ -27,6 +26,9 @@ class LogModel {
   @HiveField(6)
   final String category; // TAMBAHAN
 
+  @HiveField(7)
+  final bool isSynced; // TAMBAHAN
+
   LogModel({
     this.id,
     required this.title,
@@ -34,18 +36,20 @@ class LogModel {
     required this.date,
     required this.authorId,
     required this.teamId,
-    required this.category, // TAMBAHAN
+    required this.category,
+    this.isSynced = true, // default true untuk data dari cloud
   });
 
   Map<String, dynamic> toMap() => {
-        '_id': id != null ? ObjectId.fromHexString(id!) : ObjectId(),
-        'title': title,
-        'description': description,
-        'date': date,
-        'authorId': authorId,
-        'teamId': teamId,
-        'category': category, // TAMBAHAN
-      };
+    '_id': id != null ? ObjectId.fromHexString(id!) : ObjectId(),
+    'title': title,
+    'description': description,
+    'date': date,
+    'authorId': authorId,
+    'teamId': teamId,
+    'category': category,
+    'isSynced': isSynced,
+  };
 
   factory LogModel.fromMap(Map<String, dynamic> map) {
     return LogModel(
@@ -55,7 +59,30 @@ class LogModel {
       date: map['date'] ?? '',
       authorId: map['authorId'] ?? 'unknown',
       teamId: map['teamId'] ?? 'no_team',
-      category: map['category'] ?? 'software', // TAMBAHAN
+      category: map['category'] ?? 'software',
+      isSynced: true, // Data dari DB Cloud selalu dianggap sudah sinkron
+    );
+  }
+
+  LogModel copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? date,
+    String? authorId,
+    String? teamId,
+    String? category,
+    bool? isSynced,
+  }) {
+    return LogModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      date: date ?? this.date,
+      authorId: authorId ?? this.authorId,
+      teamId: teamId ?? this.teamId,
+      category: category ?? this.category,
+      isSynced: isSynced ?? this.isSynced,
     );
   }
 }
