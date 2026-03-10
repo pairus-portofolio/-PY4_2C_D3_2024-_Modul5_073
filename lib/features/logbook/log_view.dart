@@ -4,8 +4,8 @@ import 'package:logbook_app_073/features/logbook/log_controller.dart';
 import 'package:logbook_app_073/features/logbook/models/log_model.dart';
 import 'package:logbook_app_073/features/logbook/widgets/log_card.dart';
 import 'package:logbook_app_073/features/logbook/widgets/log_empty_state.dart';
-import 'package:logbook_app_073/features/logbook/widgets/log_category_dialog.dart';
-import 'package:logbook_app_073/services/access_control_service.dart';
+import 'package:logbook_app_073/features/logbook/log_editor_page.dart';
+import 'package:logbook_app_073/services/access_policy.dart';
 
 // ────────────────────────────────────────────────────────────
 // LogView
@@ -21,14 +21,15 @@ class LogView extends StatefulWidget {
 
 class _LogViewState extends State<LogView> {
   final LogController _controller = LogController();
-
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
 
   String _searchQuery = '';
-  String _selectedCategory = 'Pribadi'; // untuk dialog add/edit
   late Future<List<LogModel>> _logFuture;
+
+  // 🛡️ simulated role & userId
+  String get role =>
+      widget.username.toLowerCase() == 'ketua' ? 'ketua' : 'anggota';
+  String get userId => widget.username;
 
   @override
   void initState() {
@@ -41,8 +42,6 @@ class _LogViewState extends State<LogView> {
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -69,77 +68,35 @@ class _LogViewState extends State<LogView> {
     );
   }
 
-  // ── Dialog Tambah Catatan ─────────────────────────────────
-  void _showAddLogDialog() {
-    _titleController.clear();
-    _descController.clear();
-    _selectedCategory = 'Pribadi';
-
-    showDialog(
-      context: context,
-      builder: (context) => LogCategoryDialog(
-        titleLabel: 'Tambah Catatan',
-        titleController: _titleController,
-        descController: _descController,
-        initialCategory: _selectedCategory,
-        onCancel: () => Navigator.pop(context),
-        onSubmit: (category) {
-          if (_titleController.text.isNotEmpty &&
-              _descController.text.isNotEmpty) {
-            setState(() {
-              _logFuture = _controller.addLog(
-                _titleController.text,
-                _descController.text,
-                category: category,
-              );
-            });
-            _titleController.clear();
-            _descController.clear();
-            Navigator.pop(context);
-          }
-        },
-        submitLabel: 'Simpan',
+  // ── Navigasi Editor ──────────────────────────────────────
+  Future<void> _navigateToEditor({LogModel? log, int? index}) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            LogEditorPage(log: log, role: role, userId: userId),
       ),
     );
-  }
 
-  // ── Dialog Edit Catatan ────────────────────────────────────
-  void _showEditLogDialog(int index, LogModel log) {
-    _titleController.text = log.title;
-    _descController.text = log.description;
-    _selectedCategory = log.category;
-
-    showDialog(
-      context: context,
-      builder: (context) => LogCategoryDialog(
-        titleLabel: 'Edit Catatan',
-        titleController: _titleController,
-        descController: _descController,
-        initialCategory: _selectedCategory,
-        onCancel: () {
-          _titleController.clear();
-          _descController.clear();
-          Navigator.pop(context);
-        },
-        onSubmit: (category) {
-          if (_titleController.text.isNotEmpty &&
-              _descController.text.isNotEmpty) {
-            setState(() {
-              _logFuture = _controller.updateLog(
-                index,
-                _titleController.text,
-                _descController.text,
-                category: category,
-              );
-            });
-            _titleController.clear();
-            _descController.clear();
-            Navigator.pop(context);
-          }
-        },
-        submitLabel: 'Update',
-      ),
-    );
+    if (result != null) {
+      setState(() {
+        if (log == null) {
+          _logFuture = _controller.addLog(
+            result['title'],
+            result['description'],
+            category: result['category'],
+            authorId: userId,
+          );
+        } else {
+          _logFuture = _controller.updateLog(
+            index!,
+            result['title'],
+            result['description'],
+            category: result['category'],
+          );
+        }
+      });
+    }
   }
 
   // ── Refresh Handler ──────────────────────────────────────
@@ -147,7 +104,6 @@ class _LogViewState extends State<LogView> {
     setState(() {
       _logFuture = _controller.loadFromCloud();
     });
-    // Menunggu masa depan selesai agar RefreshIndicator tetap berputar sebentar
     await _logFuture;
   }
 
@@ -379,11 +335,19 @@ class _LogViewState extends State<LogView> {
                     itemBuilder: (context, index) {
                       final log = filteredLogs[index];
 
+                      // 🛡️ Access Checks
+                      final bool canEdit = AccessPolicy.canEdit(
+                        userId: userId,
+                        role: role,
+                        logAuthorId: log.authorId,
+                      );
+                      final bool canDelete = AccessPolicy.canDelete(role: role);
+
                       return Dismissible(
-                        key: ValueKey(
-                          log.id?? log.title + log.date,
-                        ),
-                        direction: DismissDirection.endToStart,
+                        key: ValueKey(log.id ?? log.title + log.date),
+                        direction: canDelete
+                            ? DismissDirection.endToStart
+                            : DismissDirection.none,
                         background: Container(
                           margin: const EdgeInsets.only(bottom: 14),
                           decoration: BoxDecoration(
@@ -413,6 +377,7 @@ class _LogViewState extends State<LogView> {
                           ),
                         ),
                         confirmDismiss: (direction) async {
+                          if (!canDelete) return false;
                           return await showDialog<bool>(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
@@ -469,11 +434,24 @@ class _LogViewState extends State<LogView> {
                         child: AnimatedLogCard(
                           log: log,
                           index: index,
+                          canEdit: canEdit,
+                          canDelete: canDelete,
                           onTap: () {
-                            final originalIndex = logs.indexOf(log);
-                            _showEditLogDialog(originalIndex, log);
+                            if (canEdit) {
+                              final originalIndex = logs.indexOf(log);
+                              _navigateToEditor(log: log, index: originalIndex);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Anda tidak memiliki izin untuk mengedit catatan ini.',
+                                  ),
+                                ),
+                              );
+                            }
                           },
                           onDelete: () async {
+                            if (!canDelete) return;
                             final confirm =
                                 await showDialog<bool>(
                                   context: context,
@@ -530,7 +508,7 @@ class _LogViewState extends State<LogView> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddLogDialog,
+        onPressed: () => _navigateToEditor(),
         backgroundColor: Theme.of(context).primaryColor,
         elevation: 8,
         icon: TweenAnimationBuilder<double>(

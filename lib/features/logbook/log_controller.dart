@@ -59,13 +59,14 @@ class LogController {
     String title,
     String desc, {
     String category = 'Pribadi',
+    required String authorId,
   }) async {
     final newLog = LogModel(
       id: ObjectId().oid,
       title: title,
       description: desc,
       date: DateTime.now().toIso8601String(),
-      authorId: "user1",
+      authorId: authorId,
       teamId: "team1",
       category: category,
     );

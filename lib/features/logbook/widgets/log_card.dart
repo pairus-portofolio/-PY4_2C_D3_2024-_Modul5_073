@@ -9,12 +9,17 @@ class AnimatedLogCard extends StatefulWidget {
   final VoidCallback onDelete;
   final int index;
 
+  final bool canEdit;
+  final bool canDelete;
+
   const AnimatedLogCard({
     super.key,
     required this.log,
     required this.onTap,
     required this.onDelete,
     required this.index,
+    this.canEdit = true,
+    this.canDelete = true,
   });
 
   @override
@@ -225,20 +230,23 @@ class _AnimatedLogCardState extends State<AnimatedLogCard>
                           ),
                         ),
                         // Delete button
-                        IconButton(
-                          icon: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.red[50],
-                              borderRadius: BorderRadius.circular(10),
+                        Visibility(
+                          visible: widget.canDelete,
+                          child: IconButton(
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.red[50],
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.delete_outline,
+                                color: Colors.red[400],
+                                size: 20,
+                              ),
                             ),
-                            child: Icon(
-                              Icons.delete_outline,
-                              color: Colors.red[400],
-                              size: 20,
-                            ),
+                            onPressed: widget.onDelete,
                           ),
-                          onPressed: widget.onDelete,
                         ),
                       ],
                     ),
