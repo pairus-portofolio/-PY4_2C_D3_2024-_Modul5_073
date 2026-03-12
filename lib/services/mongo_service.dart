@@ -123,6 +123,7 @@ class MongoService {
     await _collection!.replaceOne(
       where.id(ObjectId.fromHexString(id)),
       log.toMap(),
+      upsert: true,
     );
     await LogHelper.writeLog(
       "Catatan dengan ID $id berhasil diperbarui",

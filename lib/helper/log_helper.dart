@@ -48,8 +48,13 @@ class LogHelper {
   ) async {
     try {
       final Directory logDir = Directory('logs');
-      if (!await logDir.exists()) {
-        await logDir.create(recursive: true);
+      try {
+        if (!await logDir.exists()) {
+          await logDir.create(recursive: true);
+        }
+      } catch (e) {
+        // Fallback or ignore if directory creation fails in restricted environments
+        return;
       }
 
       final File logFile = File('${logDir.path}/$date.log');

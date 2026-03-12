@@ -23,7 +23,7 @@ class _LogViewState extends State<LogView> {
   final LogController _controller = LogController();
   final TextEditingController _searchController = TextEditingController();
 
-  String _searchQuery = '';
+  final ValueNotifier<String> _searchQueryNotifier = ValueNotifier('');
   late Future<List<LogModel>> _logFuture;
 
   // 🛡️ simulated role & userId
@@ -43,6 +43,8 @@ class _LogViewState extends State<LogView> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchQueryNotifier.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -242,7 +244,7 @@ class _LogViewState extends State<LogView> {
                           ),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() => _searchQuery = '');
+                            _searchQueryNotifier.value = '';
                           },
                         )
                       : const SizedBox.shrink(),
@@ -259,7 +261,7 @@ class _LogViewState extends State<LogView> {
                 ),
               ),
               onChanged: (value) {
-                setState(() => _searchQuery = value.toLowerCase());
+                _searchQueryNotifier.value = value.toLowerCase();
               },
             ),
           ),
@@ -313,205 +315,262 @@ class _LogViewState extends State<LogView> {
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const LogEmptyState(isSearching: false);
+                  return RefreshIndicator(
+                    onRefresh: _handleRefresh,
+                    color: Theme.of(context).primaryColor,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Container(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        alignment: Alignment.center,
+                        child: const LogEmptyState(isSearching: false),
+                      ),
+                    ),
+                  );
                 }
 
                 final logs = snapshot.data!;
-                final filteredLogs = logs.where((log) {
-                  // 🛡️ Visibility Check: Hanya pemilik atau jika catatan Publik
-                  final canSee = AccessPolicy.canView(
-                    log: log,
-                    currentUserId: userId,
-                  );
-                  if (!canSee) return false;
 
-                  return log.title.toLowerCase().contains(_searchQuery);
-                }).toList();
-
-                if (filteredLogs.isEmpty && _searchQuery.isNotEmpty) {
-                  return const LogEmptyState(isSearching: true);
-                }
-
-                return RefreshIndicator(
-                  onRefresh: _handleRefresh,
-                  color: Theme.of(context).primaryColor,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    itemCount: filteredLogs.length,
-                    itemBuilder: (context, index) {
-                      final log = filteredLogs[index];
-
-                      // 🛡️ Access Checks (Sovereignty: Only Author)
-                      final bool canEdit = AccessPolicy.canEdit(
-                        userId: userId,
-                        logAuthorId: log.authorId,
+                return ValueListenableBuilder<String>(
+                  valueListenable: _searchQueryNotifier,
+                  builder: (context, query, _) {
+                    final filteredLogs = logs.where((log) {
+                      // 🛡️ Visibility Check
+                      final canSee = AccessPolicy.canView(
+                        log: log,
+                        currentUserId: userId,
                       );
-                      final bool canDelete = AccessPolicy.canDelete(
-                        userId: userId,
-                        logAuthorId: log.authorId,
-                      );
+                      if (!canSee) return false;
 
-                      return Dismissible(
-                        key: ValueKey(log.id ?? log.title + log.date),
-                        direction: canDelete
-                            ? DismissDirection.endToStart
-                            : DismissDirection.none,
-                        background: Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 24),
-                          child: const Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.delete_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Hapus',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                      final titleMatch = log.title.toLowerCase().contains(query);
+                      final descMatch = log.description.toLowerCase().contains(
+                        query,
+                      );
+                      return titleMatch || descMatch;
+                    }).toList();
+
+                    if (filteredLogs.isEmpty && query.isNotEmpty) {
+                      return RefreshIndicator(
+                        onRefresh: _handleRefresh,
+                        color: Theme.of(context).primaryColor,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Container(
+                            height: MediaQuery.of(context).size.height * 0.6,
+                            alignment: Alignment.center,
+                            child: const LogEmptyState(isSearching: true),
                           ),
                         ),
-                        confirmDismiss: (direction) async {
-                          if (!canDelete) return false;
-                          return await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  title: const Text('Hapus Catatan?'),
-                                  content: Text(
-                                    'Catatan "${log.title}" akan dihapus secara permanen.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, false),
-                                      child: const Text('Batal'),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.redAccent,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                      onPressed: () => Navigator.pop(ctx, true),
-                                      child: const Text('Hapus'),
-                                    ),
-                                  ],
-                                ),
-                              ) ??
-                              false;
-                        },
-                        onDismissed: (direction) {
-                          final originalIndex = logs.indexOf(log);
-                          setState(() {
-                            _logFuture = _controller.removeLog(originalIndex);
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Catatan "${log.title}" dihapus.'),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                      );
+                    }
+
+                    if (filteredLogs.isEmpty && query.isEmpty) {
+                      return RefreshIndicator(
+                        onRefresh: _handleRefresh,
+                        color: Theme.of(context).primaryColor,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Container(
+                            height: MediaQuery.of(context).size.height * 0.6,
+                            alignment: Alignment.center,
+                            child: const LogEmptyState(isSearching: false),
+                          ),
+                        ),
+                      );
+                    }
+
+                    return RefreshIndicator(
+                      onRefresh: _handleRefresh,
+                      color: Theme.of(context).primaryColor,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        itemCount: filteredLogs.length,
+                        itemBuilder: (context, index) {
+                          final log = filteredLogs[index];
+
+                          // 🛡️ Access Checks (Sovereignty: Only Author)
+                          final bool canEdit = AccessPolicy.canEdit(
+                            userId: userId,
+                            logAuthorId: log.authorId,
+                          );
+                          final bool canDelete = AccessPolicy.canDelete(
+                            userId: userId,
+                            logAuthorId: log.authorId,
+                          );
+
+                          return Dismissible(
+                            key: ValueKey(log.id ?? log.title + log.date),
+                            direction: canDelete
+                                ? DismissDirection.endToStart
+                                : DismissDirection.none,
+                            background: Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(18),
                               ),
-                              action: SnackBarAction(
-                                label: 'OK',
-                                onPressed: () {},
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 24),
+                              child: const Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.delete_rounded,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Hapus',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        },
-                        child: AnimatedLogCard(
-                          log: log,
-                          index: index,
-                          canEdit: canEdit,
-                          canDelete: canDelete,
-                          onTap: () {
-                            if (canEdit) {
-                              final originalIndex = logs.indexOf(log);
-                              _navigateToEditor(log: log, index: originalIndex);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Anda tidak memiliki izin untuk mengedit catatan ini.',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          onDelete: () async {
-                            if (!canDelete) return;
-                            final confirm =
-                                await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    title: const Text('Hapus Catatan?'),
-                                    content: Text(
-                                      'Catatan "${log.title}" akan dihapus secara permanen.',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, false),
-                                        child: const Text('Batal'),
+                            confirmDismiss: (direction) async {
+                              if (!canDelete) return false;
+                              return await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
                                       ),
-                                      ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.redAccent,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
+                                      title: const Text('Hapus Catatan?'),
+                                      content: Text(
+                                        'Catatan "${log.title}" akan dihapus secara permanen.',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, false),
+                                          child: const Text('Batal'),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.redAccent,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(
+                                                10,
+                                              ),
                                             ),
                                           ),
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, true),
+                                          child: const Text('Hapus'),
                                         ),
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, true),
-                                        child: const Text('Hapus'),
-                                      ),
-                                    ],
-                                  ),
-                                ) ??
-                                false;
-
-                            if (confirm) {
+                                      ],
+                                    ),
+                                  ) ??
+                                  false;
+                            },
+                            onDismissed: (direction) {
                               final originalIndex = logs.indexOf(log);
                               setState(() {
                                 _logFuture = _controller.removeLog(
                                   originalIndex,
                                 );
                               });
-                            }
-                          },
-                        ),
-                      );
-                    },
-                  ),
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Catatan "${log.title}" dihapus.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  action: SnackBarAction(
+                                    label: 'OK',
+                                    onPressed: () {},
+                                  ),
+                                ),
+                              );
+                            },
+                            child: AnimatedLogCard(
+                              log: log,
+                              index: index,
+                              canEdit: canEdit,
+                              canDelete: canDelete,
+                              onTap: () {
+                                if (canEdit) {
+                                  final originalIndex = logs.indexOf(log);
+                                  _navigateToEditor(
+                                    log: log,
+                                    index: originalIndex,
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Anda tidak memiliki izin untuk mengedit catatan ini.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              onDelete: () async {
+                                if (!canDelete) return;
+                                final confirm =
+                                    await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        title: const Text('Hapus Catatan?'),
+                                        content: Text(
+                                          'Catatan "${log.title}" akan dihapus secara permanen.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, false),
+                                            child: const Text('Batal'),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.redAccent,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(
+                                                  10,
+                                                ),
+                                              ),
+                                            ),
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, true),
+                                            child: const Text('Hapus'),
+                                          ),
+                                        ],
+                                      ),
+                                    ) ??
+                                    false;
+
+                                if (confirm) {
+                                  final originalIndex = logs.indexOf(log);
+                                  setState(() {
+                                    _logFuture = _controller.removeLog(
+                                      originalIndex,
+                                    );
+                                  });
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 );
               },
             ),

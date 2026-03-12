@@ -40,6 +40,9 @@ class LogController {
   // 📥 LOAD DATA FROM ATLAS
   Future<List<LogModel>> loadFromCloud() async {
     try {
+      // 🚀 Sinkronkan dulu data lokal yang tertunda sebelum mengambil dari awan
+      await syncPendingLogs();
+
       final cloudLogs = await _mongoService.getAllLogs();
 
       // 🛑 JANGAN PAKAI clear() sembarangan!
@@ -81,7 +84,7 @@ class LogController {
   Future<List<LogModel>> addLog(
     String title,
     String desc, {
-    String category = 'Pribadi',
+    String category = 'Mechanical',
     required String authorId,
     bool isPublic = false,
   }) async {
@@ -112,7 +115,7 @@ class LogController {
     int index,
     String title,
     String desc, {
-    String category = 'Pribadi',
+    String category = 'Mechanical',
     bool isPublic = false,
   }) async {
     final oldLog = logsNotifier.value[index];
@@ -129,10 +132,12 @@ class LogController {
       (k) => _logBox.get(k)?.id == oldLog.id,
       orElse: () => null,
     );
+    
     if (boxKey != null) {
       await _logBox.put(boxKey, updatedLog);
     } else {
-      await _logBox.putAt(index, updatedLog);
+      // Jika tidak ditemukan via ID (seharusnya tidak terjadi), tambahkan sebagai baru
+      await _logBox.add(updatedLog);
     }
 
     List<LogModel> currentLogs = List.from(logsNotifier.value);
@@ -189,25 +194,36 @@ class LogController {
     final currentLogs = List<LogModel>.from(logsNotifier.value);
     final log = currentLogs[index];
 
+    // Optimistic UI: hapus dari list dulu (bisa dibatalkan jika perlu)
     currentLogs.removeAt(index);
     logsNotifier.value = currentLogs;
 
-    final boxKey = _logBox.keys.firstWhere(
-      (k) => _logBox.get(k)?.id == log.id,
-      orElse: () => null,
-    );
-    if (boxKey != null) {
-      await _logBox.delete(boxKey);
-    }
-
     try {
+      // 1. Mencoba hapus dari Atlas dulu agar konsisten
       if (log.id != null) {
         await _mongoService.deleteLog(log.id!);
       }
+
+      // 2. Jika sukses (atau tidak ada ID), hapus dari Hive
+      final boxKey = _logBox.keys.firstWhere(
+        (k) => _logBox.get(k)?.id == log.id,
+        orElse: () => null,
+      );
+      if (boxKey != null) {
+        await _logBox.delete(boxKey);
+      }
     } catch (e) {
-      debugPrint("Delete Atlas Error: $e");
+      debugPrint("Delete failed: $e");
+      // Batalkan perubahan UI jika penghapusan gagal agar tidak "hilang tapi ada"
+      loadFromLocal();
+      rethrow; // Biarkan UI menangani error (misal tampilkan SnackBar)
     }
 
     return logsNotifier.value;
+  }
+
+  void dispose() {
+    _mongoService.close();
+    logsNotifier.dispose();
   }
 }

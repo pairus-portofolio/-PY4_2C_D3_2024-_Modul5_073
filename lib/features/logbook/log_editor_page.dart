@@ -33,7 +33,7 @@ class _LogEditorPageState extends State<LogEditorPage> {
     _descController = TextEditingController(
       text: widget.log?.description ?? '',
     );
-    _selectedCategory = widget.log?.category ?? 'Pribadi';
+    _selectedCategory = widget.log?.category ?? 'Mechanical';
     _isPublic = widget.log?.isPublic ?? false;
   }
 
@@ -128,33 +128,48 @@ class _LogEditorPageState extends State<LogEditorPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      children: kCategoryIcons.keys.map((cat) {
-                        final isSelected = _selectedCategory == cat;
-                        final color = kCategoryColors[cat] ?? Colors.grey;
-                        return ChoiceChip(
-                          label: Text(cat),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() => _selectedCategory = cat);
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey[200]!),
+                        color: Colors.grey[50],
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _selectedCategory,
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            prefixIcon: Icon(Icons.category_rounded),
+                          ),
+                          items: kCategories.map((String category) {
+                            return DropdownMenuItem<String>(
+                              value: category,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    kCategoryIcons[category],
+                                    color: kCategoryColors[category],
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    category,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            if (newValue != null) {
+                              setState(() => _selectedCategory = newValue);
                             }
                           },
-                          selectedColor: color.withOpacity(0.2),
-                          labelStyle: TextStyle(
-                            color: isSelected ? color : Colors.grey[700],
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                          avatar: Icon(
-                            kCategoryIcons[cat],
-                            size: 16,
-                            color: isSelected ? color : Colors.grey,
-                          ),
-                        );
-                      }).toList(),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     const Text(
@@ -199,7 +214,7 @@ class _LogEditorPageState extends State<LogEditorPage> {
                           _isPublic ? Icons.public : Icons.lock_outline_rounded,
                           color: _isPublic ? Colors.blue : Colors.grey,
                         ),
-                        activeColor: Colors.blue,
+                        activeThumbColor: Colors.blue,
                       ),
                     ),
                   ],

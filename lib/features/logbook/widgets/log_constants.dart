@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 
-const List<String> kCategories = ['Pekerjaan', 'Pribadi', 'Urgent'];
+const List<String> kCategories = ['Mechanical', 'Electronic', 'Software'];
 
 const Map<String, Color> kCategoryColors = {
-  'Pekerjaan': Color(0xFF4A90D9),
-  'Pribadi': Color(0xFF27AE60),
-  'Urgent': Color(0xFFE74C3C),
+  'Mechanical': Color(0xFF27AE60), // Green
+  'Electronic': Color(0xFF2D9CDB), // Blue
+  'Software': Color(0xFFBB6BD9),   // Purple/Violet
 };
 
 const Map<String, Color> kCategoryBgColors = {
-  'Pekerjaan': Color(0xFFEBF4FF),
-  'Pribadi': Color(0xFFEAFAF1),
-  'Urgent': Color(0xFFFDEDEC),
+  'Mechanical': Color(0xFFEAFAF1),
+  'Electronic': Color(0xFFEBF4FF),
+  'Software': Color(0xFFF5EEFB),
 };
 
 const Map<String, IconData> kCategoryIcons = {
-  'Pekerjaan': Icons.work_outline,
-  'Pribadi': Icons.person_outline,
-  'Urgent': Icons.priority_high_rounded,
+  'Mechanical': Icons.settings_rounded,
+  'Electronic': Icons.electrical_services_rounded,
+  'Software': Icons.code_rounded,
 };

@@ -64,7 +64,7 @@ class LogModel {
       date: map['date'] ?? '',
       authorId: map['authorId'] ?? 'unknown',
       teamId: map['teamId'] ?? 'no_team',
-      category: map['category'] ?? 'software',
+      category: map['category'] ?? 'Mechanical',
       isSynced: true,
       isPublic: map['isPublic'] ?? false,
     );
